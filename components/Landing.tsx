@@ -102,9 +102,9 @@ const Landing: React.FC<LandingProps> = ({ onCreate, onJoin, status, error }) =>
         )}
       </div>
       
-      <div className="fixed bottom-4 text-center text-xs text-gray-600">
+      <footer className="mt-8 text-center text-xs text-gray-600">
         <p>Powered by PeerJS • End-to-End Client Side</p>
-      </div>
+      </footer>
     </div>
   );
 };
