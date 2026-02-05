@@ -22,21 +22,21 @@ const Landing: React.FC<LandingProps> = ({ onCreate, onJoin, status, error }) =>
   const isBusy = status === 'connecting' || status === 'generating_code';
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-900 text-white">
-      <div className="w-full max-w-md space-y-8">
+    <div className="flex flex-col items-center justify-center min-h-screen px-4 py-8 md:py-4 bg-gray-900 text-white overflow-y-auto">
+      <div className="w-full max-w-md space-y-6 md:space-y-8">
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-blue-600 mb-4 shadow-lg shadow-emerald-500/20">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-blue-600 mb-2 md:mb-4 shadow-lg shadow-emerald-500/20">
             <Logo className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-4xl font-bold tracking-tight text-white">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-white">
             PeerChat
           </h1>
-          <p className="text-gray-400 text-lg">
+          <p className="text-gray-400 text-base md:text-lg">
             Serverless, private, ephemeral.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 mt-8">
+        <div className="grid grid-cols-1 gap-4 mt-4 md:mt-8">
           {/* Join Room Card */}
           <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 transition-all hover:border-gray-600">
             <div className="flex items-center space-x-3 mb-4">
@@ -102,9 +102,9 @@ const Landing: React.FC<LandingProps> = ({ onCreate, onJoin, status, error }) =>
         )}
       </div>
       
-      <div className="fixed bottom-4 text-center text-xs text-gray-600">
+      <footer className="mt-8 text-center text-xs text-gray-600">
         <p>Powered by PeerJS • End-to-End Client Side</p>
-      </div>
+      </footer>
     </div>
   );
 };
