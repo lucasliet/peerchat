@@ -74,7 +74,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
   }, [props.messages, props.remoteStreams, showVideoGrid]);
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100 overflow-hidden font-sans">
+    <div className="flex h-[100dvh] bg-gray-900 text-gray-100 overflow-hidden font-sans">
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={() => setSidebarOpen(false)} />}
       
       <aside className={`fixed md:relative z-30 w-72 h-full bg-gray-950 flex flex-col border-r border-gray-800 transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
@@ -115,8 +115,8 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col relative bg-gray-900">
-        <header className="h-16 border-b border-gray-800 flex items-center px-4 justify-between bg-gray-900/50 backdrop-blur-md z-10">
+      <main className="flex-1 flex flex-col relative bg-gray-900 w-full">
+        <header className="h-16 border-b border-gray-800 flex items-center px-4 justify-between bg-gray-900/50 backdrop-blur-md z-10 shrink-0">
           <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 hover:bg-gray-800 rounded-full"><Menu className="w-5 h-5" /></button>
           <div className="hidden md:block">
             <h1 className="font-bold text-sm">{props.roomName}</h1>
@@ -144,7 +144,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
 
         <div className="flex-1 flex flex-col overflow-hidden">
           {showVideoGrid && (
-            <div className="bg-black/20 p-4 border-b border-gray-800 overflow-x-auto">
+            <div className="bg-black/20 p-4 border-b border-gray-800 overflow-x-auto shrink-0">
               <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 gap-3 max-w-6xl mx-auto min-w-max md:min-w-0">
                 {props.localStream && <VideoTile stream={props.localStream} user={props.currentUser} isLocal />}
                 {props.remoteStreams.map(rs => (
@@ -190,7 +190,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
           </div>
         </div>
 
-        <div className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-800">
+        <div className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-800 shrink-0">
           <form onSubmit={e => { e.preventDefault(); if (inputText.trim()) { props.onSendMessage(inputText); setInputText(''); } }} className="max-w-4xl mx-auto flex gap-2 bg-gray-850 p-1.5 rounded-2xl border border-gray-700 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all shadow-xl">
             <input 
               type="text" 

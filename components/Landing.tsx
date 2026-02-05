@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Users, LogIn, Command, ArrowRight } from 'lucide-react';
+import { Users, LogIn, ArrowRight } from 'lucide-react';
+import { Logo } from './Logo';
 
 interface LandingProps {
   onCreate: () => void;
@@ -25,7 +26,7 @@ const Landing: React.FC<LandingProps> = ({ onCreate, onJoin, status, error }) =>
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-blue-600 mb-4 shadow-lg shadow-emerald-500/20">
-            <Command className="w-8 h-8 text-white" />
+            <Logo className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-4xl font-bold tracking-tight text-white">
             PeerChat
