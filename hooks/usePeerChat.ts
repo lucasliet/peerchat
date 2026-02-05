@@ -78,6 +78,16 @@ export const usePeerChat = (): UsePeerChatReturn => {
     }
     setIsInCall(false);
     setRemoteStreams([]);
+    // Reset state to idle to allow re-joining
+    setState({
+      messages: [],
+      status: 'idle',
+      roomId: null,
+      roomName: '',
+      users: [],
+      error: null,
+      isHost: false,
+    });
   }, []);
 
   const broadcast = useCallback((msg: NetworkMessage, excludePeerId?: string) => {
@@ -287,10 +297,13 @@ export const usePeerChat = (): UsePeerChatReturn => {
       updateMyUser({ isMuted: false, isVideoOff: false });
     } else {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        // Start with audio only, camera disabled
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         localStreamRef.current = stream;
         setLocalStream(stream);
         setIsInCall(true);
+        // Update user state to reflect camera is off
+        updateMyUser({ isVideoOff: true });
         sendSystemMessage(`${myUser.name} started a call`);
         
         stateRef.current.users.forEach(u => {
