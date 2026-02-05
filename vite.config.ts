@@ -7,7 +7,7 @@ export default defineConfig({
   publicDir: 'assets',
   // IMPORTANTE: Substitua 'NOME_DO_REPOSITORIO' pelo nome do seu projeto no GitHub
   // Ex: se a URL é https://usuario.github.io/meu-chat/, a base deve ser '/meu-chat/'
-  base: '/peerchat/',
+  base: './',
   build: {
     outDir: 'dist',
     target: 'esnext'
