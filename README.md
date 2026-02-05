@@ -1,3 +1,6 @@
+![logo](assets/og-card.png)
+https://peerchat.pages.dev
+
 # PeerChat
 
 **PeerChat** is a serverless, peer-to-peer (P2P) chat and video calling application that runs entirely in the browser. It uses **WebRTC** (via PeerJS) to establish direct connections between users without storing messages or video streams on a central server.
