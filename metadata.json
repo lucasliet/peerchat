@@ -1,0 +1,8 @@
+{
+  "name": "PeerChat",
+  "description": "A serverless, peer-to-peer chat application featuring a ChatGPT-like interface. Connect directly with others using simple 4-digit room codes.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
