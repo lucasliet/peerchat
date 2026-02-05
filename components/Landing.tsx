@@ -22,7 +22,7 @@ const Landing: React.FC<LandingProps> = ({ onCreate, onJoin, status, error }) =>
   const isBusy = status === 'connecting' || status === 'generating_code';
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 py-8 md:py-4 bg-gray-900 text-white overflow-y-auto">
+    <div className="flex flex-col items-center justify-center min-h-screen px-4 py-8 md:py-4 bg-gray-900 text-white overflow-y-auto">
       <div className="w-full max-w-md space-y-6 md:space-y-8">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-blue-600 mb-2 md:mb-4 shadow-lg shadow-emerald-500/20">
