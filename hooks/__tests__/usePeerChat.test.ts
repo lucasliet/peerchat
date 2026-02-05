@@ -14,7 +14,10 @@ vi.mock('peerjs', () => {
 
 // Mock navigator.mediaDevices
 const mockGetUserMedia = vi.fn();
-Object.defineProperty(global.navigator, 'mediaDevices', {
+if (typeof globalThis.navigator === 'undefined') {
+  (globalThis as any).navigator = {};
+}
+Object.defineProperty(globalThis.navigator, 'mediaDevices', {
   writable: true,
   value: {
     getUserMedia: mockGetUserMedia,
