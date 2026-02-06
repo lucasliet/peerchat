@@ -57,13 +57,20 @@ Object.defineProperty(globalThis.navigator, 'mediaDevices', {
   },
 });
 
-// Mock crypto.randomUUID
+// Mock crypto.randomUUID with proper UUID format
 if (!globalThis.crypto) {
   (globalThis as any).crypto = {};
 }
 if (!globalThis.crypto.randomUUID) {
-  let counter = 0;
-  globalThis.crypto.randomUUID = () => `test-uuid-${counter++}`;
+  let sequenceNum = 0;
+  globalThis.crypto.randomUUID = () => {
+    const seg1 = (sequenceNum++).toString(16).padStart(8, '0');
+    const seg2 = Math.floor(Math.random() * 0xffff).toString(16).padStart(4, '0');
+    const seg3 = Math.floor(Math.random() * 0xffff).toString(16).padStart(4, '0');
+    const seg4 = Math.floor(Math.random() * 0xffff).toString(16).padStart(4, '0');
+    const seg5 = Math.floor(Math.random() * 0xffffffffffff).toString(16).padStart(12, '0');
+    return `${seg1}-${seg2}-${seg3}-${seg4}-${seg5}` as `${string}-${string}-${string}-${string}-${string}`;
+  };
 }
 
 describe('usePeerChat - Initial State', () => {
