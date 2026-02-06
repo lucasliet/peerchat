@@ -269,6 +269,118 @@ describe('usePeerChat - Exit Chat Button', () => {
   });
 });
 
+describe('usePeerChat - Component Unmount Cleanup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should stop all media tracks when component unmounts', async () => {
+    const mockAudioTrackStop = vi.fn();
+    const mockVideoTrackStop = vi.fn();
+    
+    const mockAudioTrack = {
+      stop: mockAudioTrackStop,
+      enabled: true,
+      kind: 'audio',
+      id: 'audio-1',
+    };
+    
+    const mockVideoTrack = {
+      stop: mockVideoTrackStop,
+      kind: 'video',
+      id: 'video-1',
+      enabled: true,
+    };
+    
+    let currentTracks = [mockAudioTrack];
+    const mockStream = {
+      getTracks: vi.fn(() => currentTracks.slice()),
+      getAudioTracks: vi.fn(() => currentTracks.filter(t => t.kind === 'audio')),
+      getVideoTracks: vi.fn(() => currentTracks.filter(t => t.kind === 'video')),
+      addTrack: vi.fn((track) => {
+        currentTracks.push(track);
+      }),
+      removeTrack: vi.fn(),
+    } as any;
+    
+    const mockVideoStream = {
+      getTracks: vi.fn(() => [mockVideoTrack]),
+      getVideoTracks: vi.fn(() => [mockVideoTrack]),
+    } as any;
+    
+    mockGetUserMedia.mockResolvedValueOnce(mockStream);
+    
+    const { result, unmount } = renderHook(() => usePeerChat());
+    
+    // Start a call
+    await act(async () => {
+      await result.current.toggleCall();
+    });
+    
+    await waitFor(() => {
+      expect(result.current.isInCall).toBe(true);
+    });
+    
+    // Turn on video
+    mockGetUserMedia.mockResolvedValueOnce(mockVideoStream);
+    await act(async () => {
+      await result.current.toggleVideo();
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Tracks should not be stopped yet
+    expect(mockAudioTrackStop).not.toHaveBeenCalled();
+    expect(mockVideoTrackStop).not.toHaveBeenCalled();
+    
+    // Unmount the component (simulating user navigating away)
+    unmount();
+    
+    // Verify all tracks were stopped on unmount
+    expect(mockAudioTrackStop).toHaveBeenCalled();
+    expect(mockVideoTrackStop).toHaveBeenCalled();
+  });
+
+  it('should close all peer connections on unmount', async () => {
+    const mockStream = {
+      getTracks: vi.fn(() => []),
+      getAudioTracks: vi.fn(() => [{ enabled: true, stop: vi.fn() }]),
+      getVideoTracks: vi.fn(() => []),
+      addTrack: vi.fn(),
+      removeTrack: vi.fn(),
+    } as any;
+    
+    mockGetUserMedia.mockResolvedValue(mockStream);
+    
+    const { result, unmount } = renderHook(() => usePeerChat());
+    
+    // Create room and start call
+    act(() => {
+      result.current.createRoom();
+    });
+    
+    await act(async () => {
+      await result.current.toggleCall();
+    });
+    
+    await waitFor(() => {
+      expect(result.current.isInCall).toBe(true);
+    });
+    
+    // Spy on peer destroy
+    const mockPeerDestroy = vi.fn();
+    if (mockPeerInstance) {
+      mockPeerInstance.destroy = mockPeerDestroy;
+    }
+    
+    // Unmount
+    unmount();
+    
+    // Verify peer was destroyed
+    expect(mockPeerDestroy).toHaveBeenCalled();
+  });
+});
+
 describe('usePeerChat - Camera Disabled on Call Start', () => {
   beforeEach(() => {
     vi.clearAllMocks();

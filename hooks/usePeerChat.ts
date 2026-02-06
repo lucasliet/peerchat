@@ -90,6 +90,25 @@ export const usePeerChat = (): UsePeerChatReturn => {
     });
   }, []);
 
+  // Cleanup on component unmount to ensure camera/mic are released
+  useEffect(() => {
+    return () => {
+      // Only stop media tracks on unmount, don't reset state
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+        localStreamRef.current = null;
+      }
+      mediaConnectionsRef.current.forEach(c => c.close());
+      mediaConnectionsRef.current.clear();
+      connectionsRef.current.forEach(c => c.close());
+      connectionsRef.current.clear();
+      if (peerRef.current) {
+        peerRef.current.destroy();
+        peerRef.current = null;
+      }
+    };
+  }, []);
+
   const broadcast = useCallback((msg: NetworkMessage, excludePeerId?: string) => {
     connectionsRef.current.forEach((conn, peerId) => {
       if (peerId !== excludePeerId && conn.open) {
