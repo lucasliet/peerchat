@@ -90,6 +90,25 @@ export const usePeerChat = (): UsePeerChatReturn => {
     });
   }, []);
 
+  // Cleanup on component unmount to ensure camera/mic are released
+  useEffect(() => {
+    return () => {
+      // Only stop media tracks on unmount, don't reset state
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+        localStreamRef.current = null;
+      }
+      mediaConnectionsRef.current.forEach(c => c.close());
+      mediaConnectionsRef.current.clear();
+      connectionsRef.current.forEach(c => c.close());
+      connectionsRef.current.clear();
+      if (peerRef.current) {
+        peerRef.current.destroy();
+        peerRef.current = null;
+      }
+    };
+  }, []);
+
   const broadcast = useCallback((msg: NetworkMessage, excludePeerId?: string) => {
     connectionsRef.current.forEach((conn, peerId) => {
       if (peerId !== excludePeerId && conn.open) {
@@ -370,6 +389,14 @@ export const usePeerChat = (): UsePeerChatReturn => {
           setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
           updateMyUser({ isVideoOff: false });
         }
+        
+        // IMPORTANT: Stop all tracks from the temporary stream to release camera hardware
+        // We only needed to extract the video track, so clean up the rest
+        videoStream.getTracks().forEach(track => {
+          if (track !== newVideoTrack) {
+            track.stop();
+          }
+        });
       } catch (err) {
         console.error("Failed to restart video", err);
         setState(prev => ({ ...prev, error: 'Failed to access camera' }));
