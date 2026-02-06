@@ -1,21 +1,22 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import Landing from './Landing';
 
+const mockOnCreate = vi.fn();
+const mockOnJoin = vi.fn();
+
+const defaultProps = {
+  onCreate: mockOnCreate,
+  onJoin: mockOnJoin,
+  status: 'idle',
+  error: null,
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 describe('Landing', () => {
-  const mockOnCreate = vi.fn();
-  const mockOnJoin = vi.fn();
-
-  const defaultProps = {
-    onCreate: mockOnCreate,
-    onJoin: mockOnJoin,
-    status: 'idle',
-    error: null,
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
   describe('Rendering', () => {
     it('should render the landing page with title', () => {

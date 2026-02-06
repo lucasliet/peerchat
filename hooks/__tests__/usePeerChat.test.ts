@@ -66,15 +66,6 @@ if (!globalThis.crypto.randomUUID) {
   globalThis.crypto.randomUUID = () => `test-uuid-${counter++}`;
 }
 
-// Mock crypto.randomUUID
-if (!globalThis.crypto) {
-  (globalThis as any).crypto = {};
-}
-if (!globalThis.crypto.randomUUID) {
-  let counter = 0;
-  globalThis.crypto.randomUUID = () => `test-uuid-${counter++}`;
-}
-
 describe('usePeerChat - Initial State', () => {
   beforeEach(() => {
     vi.clearAllMocks();

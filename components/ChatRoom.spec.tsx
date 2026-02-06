@@ -3,73 +3,74 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ChatRoom from './ChatRoom';
 import type { Message, PeerUser } from '../types';
 
-describe('ChatRoom', () => {
-  const mockUser: PeerUser = {
-    id: 'user-1',
-    peerId: 'peer-1',
-    name: 'TestUser',
-    color: 'bg-blue-500',
+const mockUser: PeerUser = {
+  id: 'user-1',
+  peerId: 'peer-1',
+  name: 'TestUser',
+  color: 'bg-blue-500',
+  isMuted: false,
+  isVideoOff: false,
+};
+
+const mockUsers: PeerUser[] = [
+  mockUser,
+  {
+    id: 'user-2',
+    peerId: 'peer-2',
+    name: 'OtherUser',
+    color: 'bg-green-500',
     isMuted: false,
     isVideoOff: false,
-  };
+  },
+];
 
-  const mockUsers: PeerUser[] = [
-    mockUser,
-    {
-      id: 'user-2',
-      peerId: 'peer-2',
-      name: 'OtherUser',
-      color: 'bg-green-500',
-      isMuted: false,
-      isVideoOff: false,
-    },
-  ];
+const mockMessages: Message[] = [
+  {
+    id: 'msg-1',
+    senderId: 'user-1',
+    senderName: 'TestUser',
+    content: 'Hello, world!',
+    timestamp: Date.now(),
+    type: 'text',
+    isSelf: true,
+  },
+  {
+    id: 'msg-2',
+    senderId: 'system',
+    senderName: 'System',
+    content: 'OtherUser joined the room',
+    timestamp: Date.now(),
+    type: 'system',
+    isSelf: false,
+  },
+];
 
-  const mockMessages: Message[] = [
-    {
-      id: 'msg-1',
-      senderId: 'user-1',
-      senderName: 'TestUser',
-      content: 'Hello, world!',
-      timestamp: Date.now(),
-      type: 'text',
-      isSelf: true,
-    },
-    {
-      id: 'msg-2',
-      senderId: 'system',
-      senderName: 'System',
-      content: 'OtherUser joined the room',
-      timestamp: Date.now(),
-      type: 'system',
-      isSelf: false,
-    },
-  ];
+const defaultProps = {
+  roomId: '1234',
+  roomName: 'Test Room',
+  isHost: true,
+  messages: mockMessages,
+  users: mockUsers,
+  currentUser: mockUser,
+  error: null,
+  onClearError: vi.fn(),
+  onSendMessage: vi.fn(),
+  onLeave: vi.fn(),
+  onRename: vi.fn(),
+  onRenameRoom: vi.fn(),
+  isInCall: false,
+  onToggleCall: vi.fn(),
+  localStream: null,
+  remoteStreams: [],
+  onToggleAudio: vi.fn(),
+  onToggleVideo: vi.fn(),
+};
 
-  const defaultProps = {
-    roomId: '1234',
-    roomName: 'Test Room',
-    isHost: true,
-    messages: mockMessages,
-    users: mockUsers,
-    currentUser: mockUser,
-    error: null,
-    onClearError: vi.fn(),
-    onSendMessage: vi.fn(),
-    onLeave: vi.fn(),
-    onRename: vi.fn(),
-    onRenameRoom: vi.fn(),
-    isInCall: false,
-    onToggleCall: vi.fn(),
-    localStream: null,
-    remoteStreams: [],
-    onToggleAudio: vi.fn(),
-    onToggleVideo: vi.fn(),
-  };
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+describe('ChatRoom', () => {
 
   describe('Rendering', () => {
     it('should render room information', () => {
