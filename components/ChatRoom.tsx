@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, LogOut, Copy, Check, Users, Menu, X, Phone, PhoneOff, Mic, MicOff, Video, VideoOff, AlertCircle } from 'lucide-react';
+import { Send, LogOut, Copy, Check, Users, Menu, X, Phone, PhoneOff, Mic, MicOff, Video, VideoOff, AlertCircle, Edit } from 'lucide-react';
 import { Message, PeerUser } from '../types';
 import { formatTime } from '../utils';
 
@@ -64,7 +64,57 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
   const [inputText, setInputText] = useState('');
   const [copied, setCopied] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingRoom, setEditingRoom] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newRoomName, setNewRoomName] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleStartEditUser = (user: PeerUser) => {
+    if (user.id === props.currentUser.id) {
+      setEditingUserId(user.id);
+      setNewUserName(user.name);
+    }
+  };
+
+  const handleSaveUser = () => {
+    const trimmed = newUserName.trim();
+    if (editingUserId === props.currentUser.id && trimmed.length > 0 && trimmed.length <= 10) {
+      props.onRename(trimmed);
+      setEditingUserId(null);
+    }
+  };
+
+  const handleStartEditRoom = () => {
+    if (props.isHost) {
+      setEditingRoom(true);
+      setNewRoomName(props.roomName);
+    }
+  };
+
+  const handleSaveRoom = () => {
+    const trimmed = newRoomName.trim();
+    if (props.isHost && trimmed.length > 0 && trimmed.length <= 30) {
+      props.onRenameRoom(trimmed);
+      setEditingRoom(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingUserId(null);
+    setEditingRoom(false);
+    setNewUserName('');
+    setNewRoomName('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      if (editingUserId) handleSaveUser();
+      if (editingRoom) handleSaveRoom();
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
+  };
 
   // Determine if video grid should be shown: if local user started call OR if there are incoming streams
   const showVideoGrid = props.isInCall || props.remoteStreams.length > 0;
@@ -78,12 +128,34 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={() => setSidebarOpen(false)} />}
       
       <aside className={`fixed md:relative z-30 w-72 h-full bg-gray-950 flex flex-col border-r border-gray-800 transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-          <div className="flex items-center gap-2 truncate">
-            <Users className="w-5 h-5 text-emerald-500 shrink-0" />
-            <h2 className="font-bold truncate">{props.roomName}</h2>
+        <div className="p-4 border-b border-gray-800 flex justify-between items-center gap-2">
+          {editingRoom ? (
+            <input
+              type="text"
+              value={newRoomName}
+              onChange={e => setNewRoomName(e.target.value)}
+              onKeyDown={handleKeyDown}
+              maxLength={30}
+              className="flex-1 bg-gray-900 px-2 py-1 rounded border border-gray-700 text-sm font-bold outline-none focus:border-blue-500"
+              autoFocus
+            />
+          ) : (
+            <div className="flex items-center gap-2 truncate flex-1">
+              <Users className="w-5 h-5 text-emerald-500 shrink-0" />
+              <h2 className="font-bold truncate">{props.roomName}</h2>
+            </div>
+          )}
+          <div className="flex gap-1 shrink-0">
+            {editingRoom ? (
+              <>
+                <button onClick={handleSaveRoom} className="p-1 hover:bg-gray-800 rounded-full text-green-500"><Check className="w-4 h-4" /></button>
+                <button onClick={handleCancelEdit} className="p-1 hover:bg-gray-800 rounded-full text-red-500"><X className="w-4 h-4" /></button>
+              </>
+            ) : (
+              props.isHost && <button onClick={handleStartEditRoom} className="p-1 hover:bg-gray-800 rounded-full text-gray-500"><Edit className="w-4 h-4" /></button>
+            )}
+            <button onClick={() => setSidebarOpen(false)} className="md:hidden p-1 hover:bg-gray-800 rounded-full"><X className="w-5 h-5" /></button>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="md:hidden p-1 hover:bg-gray-800 rounded-full"><X className="w-5 h-5" /></button>
         </div>
 
         <div className="p-4 border-b border-gray-800">
@@ -97,14 +169,38 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Online ({props.users.length})</p>
           {props.users.map(u => (
-            <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-900 transition-colors">
+            <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-900 transition-colors group">
               <UserAvatar user={u} size="sm" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{u.name} {u.id === props.currentUser.id && '(You)'}</p>
-                <div className="flex gap-1 mt-0.5">
-                  {u.isMuted && <MicOff className="w-3 h-3 text-red-500" />}
-                  {u.isVideoOff && <VideoOff className="w-3 h-3 text-red-500" />}
-                </div>
+              <div className="flex-1 min-w-0 flex items-center gap-2">
+                {editingUserId === u.id ? (
+                  <input
+                    type="text"
+                    value={newUserName}
+                    onChange={e => setNewUserName(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    maxLength={10}
+                    className="flex-1 bg-gray-800 px-2 py-1 rounded border border-gray-700 text-sm outline-none focus:border-blue-500"
+                    autoFocus
+                  />
+                ) : (
+                  <p className="text-sm font-medium truncate">{u.name} {u.id === props.currentUser.id && '(You)'}</p>
+                )}
+              </div>
+              <div className="flex gap-1 shrink-0">
+                {editingUserId === u.id ? (
+                  <>
+                    <button onClick={handleSaveUser} className="p-1 hover:bg-gray-800 rounded-full text-green-500"><Check className="w-3 h-3" /></button>
+                    <button onClick={handleCancelEdit} className="p-1 hover:bg-gray-800 rounded-full text-red-500"><X className="w-3 h-3" /></button>
+                  </>
+                ) : (
+                  u.id === props.currentUser.id && (
+                    <button onClick={() => handleStartEditUser(u)} className="p-1 hover:bg-gray-800 rounded-full text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"><Edit className="w-3 h-3" /></button>
+                  )
+                )}
+              </div>
+              <div className="flex gap-1 mt-0.5">
+                {u.isMuted && <MicOff className="w-3 h-3 text-red-500" />}
+                {u.isVideoOff && <VideoOff className="w-3 h-3 text-red-500" />}
               </div>
             </div>
           ))}
