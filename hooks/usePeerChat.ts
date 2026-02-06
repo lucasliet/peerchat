@@ -370,6 +370,14 @@ export const usePeerChat = (): UsePeerChatReturn => {
           setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
           updateMyUser({ isVideoOff: false });
         }
+        
+        // IMPORTANT: Stop all tracks from the temporary stream to release camera hardware
+        // We only needed to extract the video track, so clean up the rest
+        videoStream.getTracks().forEach(track => {
+          if (track !== newVideoTrack) {
+            track.stop();
+          }
+        });
       } catch (err) {
         console.error("Failed to restart video", err);
         setState(prev => ({ ...prev, error: 'Failed to access camera' }));

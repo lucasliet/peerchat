@@ -57,6 +57,31 @@ Object.defineProperty(globalThis.navigator, 'mediaDevices', {
   },
 });
 
+// Mock MediaStream for jsdom environment
+if (typeof globalThis.MediaStream === 'undefined') {
+  (globalThis as any).MediaStream = class MediaStream {
+    tracks: any[];
+    constructor(tracks?: any[]) {
+      this.tracks = tracks || [];
+    }
+    getTracks() {
+      return this.tracks;
+    }
+    getAudioTracks() {
+      return this.tracks.filter((t: any) => t.kind === 'audio');
+    }
+    getVideoTracks() {
+      return this.tracks.filter((t: any) => t.kind === 'video');
+    }
+    addTrack(track: any) {
+      this.tracks.push(track);
+    }
+    removeTrack(track: any) {
+      this.tracks = this.tracks.filter((t: any) => t !== track);
+    }
+  };
+}
+
 // Mock crypto.randomUUID with proper UUID format
 if (!globalThis.crypto) {
   (globalThis as any).crypto = {};
@@ -620,6 +645,195 @@ describe('usePeerChat - Call Management', () => {
     await waitFor(() => {
       expect(result.current.isInCall).toBe(true);
       expect(result.current.localStream).toBeTruthy();
+    });
+  });
+});
+
+describe('usePeerChat - Video Toggle and Camera Hardware', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should stop video tracks when toggling video off', async () => {
+    const mockVideoTrackStop = vi.fn();
+    const mockVideoTrack = { 
+      stop: mockVideoTrackStop, 
+      kind: 'video',
+      id: 'video-track-1',
+      enabled: true,
+    };
+    
+    const mockAudioTrack = { 
+      enabled: true, 
+      kind: 'audio',
+      id: 'audio-track-1',
+      stop: vi.fn(),
+    };
+    
+    // Create stream with dynamic track management
+    let currentTracks = [mockAudioTrack];
+    const mockStream = {
+      getTracks: vi.fn(() => currentTracks.slice()),
+      getAudioTracks: vi.fn(() => currentTracks.filter(t => t.kind === 'audio')),
+      getVideoTracks: vi.fn(() => currentTracks.filter(t => t.kind === 'video')),
+      addTrack: vi.fn((track) => {
+        currentTracks.push(track);
+      }),
+      removeTrack: vi.fn((track) => {
+        currentTracks = currentTracks.filter(t => t !== track);
+      }),
+    } as any;
+    
+    const mockVideoStream = {
+      getTracks: vi.fn(() => [mockVideoTrack]),
+      getVideoTracks: vi.fn(() => [mockVideoTrack]),
+    } as any;
+    
+    // Start call with audio only
+    mockGetUserMedia.mockResolvedValueOnce(mockStream);
+    
+    const { result } = renderHook(() => usePeerChat());
+    
+    await act(async () => {
+      await result.current.toggleCall();
+    });
+    
+    await waitFor(() => {
+      expect(result.current.isInCall).toBe(true);
+    });
+    
+    // Turn video ON
+    mockGetUserMedia.mockResolvedValueOnce(mockVideoStream);
+    
+    await act(async () => {
+      await result.current.toggleVideo();
+    });
+    
+    // Wait a bit for state updates
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Verify video track was added
+    expect(mockStream.addTrack).toHaveBeenCalledWith(mockVideoTrack);
+    
+    // Turn video OFF
+    await act(async () => {
+      await result.current.toggleVideo();
+    });
+    
+    // Wait for state updates
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Verify video track was stopped and removed - this is the critical fix
+    expect(mockVideoTrackStop).toHaveBeenCalled();
+    expect(mockStream.removeTrack).toHaveBeenCalledWith(mockVideoTrack);
+  });
+
+  it('should cleanup temporary video stream tracks after extracting video track', async () => {
+    const mockVideoTrackStop = vi.fn();
+    const mockExtraTrackStop = vi.fn();
+    
+    const mockVideoTrack = { 
+      stop: mockVideoTrackStop, 
+      kind: 'video',
+      id: 'video-track-main',
+      enabled: true,
+    };
+    
+    // This simulates extra tracks that might be in the temporary stream
+    const mockExtraTrack = {
+      stop: mockExtraTrackStop,
+      kind: 'audio',
+      id: 'extra-track',
+      enabled: true,
+    };
+    
+    const mockAudioTrack = { 
+      enabled: true, 
+      kind: 'audio',
+      id: 'audio-track-1',
+      stop: vi.fn(),
+    };
+    
+    let currentTracks = [mockAudioTrack];
+    const mockCallStream = {
+      getTracks: vi.fn(() => currentTracks.slice()),
+      getAudioTracks: vi.fn(() => currentTracks.filter(t => t.kind === 'audio')),
+      getVideoTracks: vi.fn(() => currentTracks.filter(t => t.kind === 'video')),
+      addTrack: vi.fn((track) => {
+        currentTracks.push(track);
+      }),
+      removeTrack: vi.fn(),
+    } as any;
+    
+    // The temporary stream from getUserMedia has multiple tracks
+    const mockTempVideoStream = {
+      getTracks: vi.fn(() => [mockVideoTrack, mockExtraTrack]),
+      getVideoTracks: vi.fn(() => [mockVideoTrack]),
+    } as any;
+    
+    // Start call
+    mockGetUserMedia.mockResolvedValueOnce(mockCallStream);
+    
+    const { result } = renderHook(() => usePeerChat());
+    
+    await act(async () => {
+      await result.current.toggleCall();
+    });
+    
+    await waitFor(() => {
+      expect(result.current.isInCall).toBe(true);
+    });
+    
+    // Turn video ON - this creates the temporary stream with extra tracks
+    mockGetUserMedia.mockResolvedValueOnce(mockTempVideoStream);
+    
+    await act(async () => {
+      await result.current.toggleVideo();
+    });
+    
+    // Wait for async operations
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Critical test: verify that extra tracks from temp stream are stopped
+    // This prevents the camera hardware from staying active
+    expect(mockExtraTrackStop).toHaveBeenCalled();
+    
+    // The main video track should NOT be stopped yet (it's being used)
+    expect(mockVideoTrackStop).not.toHaveBeenCalled();
+  });
+
+  it('should handle camera access errors gracefully', async () => {
+    const mockAudioTrack = { enabled: true, kind: 'audio', stop: vi.fn() };
+    const mockCallStream = {
+      getTracks: vi.fn(() => [mockAudioTrack]),
+      getAudioTracks: vi.fn(() => [mockAudioTrack]),
+      getVideoTracks: vi.fn(() => []),
+      addTrack: vi.fn(),
+      removeTrack: vi.fn(),
+    } as any;
+    
+    mockGetUserMedia.mockResolvedValueOnce(mockCallStream);
+    
+    const { result } = renderHook(() => usePeerChat());
+    
+    await act(async () => {
+      await result.current.toggleCall();
+    });
+    
+    await waitFor(() => {
+      expect(result.current.isInCall).toBe(true);
+    });
+    
+    // Mock camera access failure
+    mockGetUserMedia.mockRejectedValueOnce(new Error('Camera not available'));
+    
+    await act(async () => {
+      await result.current.toggleVideo();
+    });
+    
+    // Wait for error to be set
+    await waitFor(() => {
+      expect(result.current.error).toBe('Failed to access camera');
     });
   });
 });
