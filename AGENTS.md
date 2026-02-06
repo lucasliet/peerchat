@@ -8,7 +8,7 @@ Follow Clean Architecture principles. Organize the codebase into well-defined la
 src/
 ├── domain/        # Enterprise business rules (models, use cases, errors)
 ├── data/          # Application business rules (protocols, remote implementations)
-├── infra/         # Frameworks &amp; drivers (HTTP clients, cache adapters)
+├── infra/         # Frameworks & drivers (HTTP clients, cache adapters)
 ├── presentation/  # UI layer (React components, hooks, pages, styles)
 ├── validation/    # Input validation logic (validators, protocols, errors)
 └── main/          # Composition root (factories, routes, adapters, decorators)
