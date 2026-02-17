@@ -57,6 +57,15 @@ Object.defineProperty(globalThis.navigator, 'mediaDevices', {
   },
 });
 
+// Mock HTMLCanvasElement for jsdom (canvas npm package not installed)
+HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+  fillStyle: '',
+  fillRect: vi.fn(),
+})) as any;
+HTMLCanvasElement.prototype.captureStream = vi.fn(() => ({
+  getVideoTracks: () => [{ kind: 'video', stop: vi.fn(), enabled: true }],
+})) as any;
+
 // Mock MediaStream for jsdom environment
 if (typeof globalThis.MediaStream === 'undefined') {
   (globalThis as any).MediaStream = class MediaStream {
@@ -390,8 +399,7 @@ describe('usePeerChat - Camera Disabled on Call Start', () => {
     vi.clearAllMocks();
   });
 
-  it('should start call with camera disabled (video: false)', async () => {
-    // Mock getUserMedia to return a stream
+  it('should start call with audio only (camera uses canvas placeholder)', async () => {
     const mockStream = {
       getTracks: vi.fn(() => []),
       getAudioTracks: vi.fn(() => [{ enabled: true }]),
@@ -404,19 +412,16 @@ describe('usePeerChat - Camera Disabled on Call Start', () => {
     
     const { result } = renderHook(() => usePeerChat());
     
-    // Simulate creating a room and getting connected
     act(() => {
       result.current.createRoom();
     });
     
-    // Toggle call (start call)
     await act(async () => {
       await result.current.toggleCall();
     });
     
-    // Verify getUserMedia was called with video: false
     await waitFor(() => {
-      expect(mockGetUserMedia).toHaveBeenCalledWith({ audio: true, video: false });
+      expect(mockGetUserMedia).toHaveBeenCalledWith({ audio: true });
     });
   });
 

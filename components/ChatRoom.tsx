@@ -11,11 +11,13 @@ interface ChatRoomProps {
   onToggleAudio: () => void; onToggleVideo: () => void;
 }
 
-const UserAvatar: React.FC<{ user: PeerUser; size?: 'sm' | 'md' | 'lg' }> = ({ user, size = 'md' }) => {
+const UserAvatar: React.FC<{ user?: PeerUser; size?: 'sm' | 'md' | 'lg' }> = ({ user, size = 'md' }) => {
   const sizeClasses = { sm: 'w-8 h-8 text-xs', md: 'w-12 h-12 text-sm', lg: 'w-16 h-16 text-xl' };
+  const fallbackColor = 'bg-gray-600';
+  const fallbackName = '??';
   return (
-    <div className={`${sizeClasses[size]} rounded-full ${user.color} flex items-center justify-center font-bold text-white shadow-lg shrink-0 transition-transform`}>
-      {user.name.substring(0, 2).toUpperCase()}
+    <div className={`${sizeClasses[size]} rounded-full ${user?.color || fallbackColor} flex items-center justify-center font-bold text-white shadow-lg shrink-0 transition-transform`}>
+      {(user?.name || fallbackName).substring(0, 2).toUpperCase()}
     </div>
   );
 };
@@ -40,7 +42,7 @@ const VideoTile: React.FC<{ stream: MediaStream | null; user?: PeerUser; isLocal
     <div className="relative group bg-gray-950 rounded-xl overflow-hidden aspect-video border border-gray-800 shadow-xl flex items-center justify-center transition-all">
       {!shouldShowVideo ? (
         <div className="flex flex-col items-center gap-2 animate-in fade-in duration-300">
-          <UserAvatar user={user!} size="md" />
+          <UserAvatar user={user} size="md" />
           <span className="text-[10px] text-gray-500 font-medium">Camera Off</span>
         </div>
       ) : (

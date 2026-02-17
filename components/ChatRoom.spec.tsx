@@ -271,4 +271,105 @@ describe('ChatRoom', () => {
       expect(screen.getByText(/online/i)).toBeInTheDocument();
     });
   });
+
+  describe('Inline Editing', () => {
+    it('should allow user to start editing their name', () => {
+      render(<ChatRoom {...defaultProps} />);
+      const userItem = screen.getByText('TestUser (You)').closest('div.group');
+      const editButton = userItem?.querySelector('button');
+      
+      if (editButton) {
+        fireEvent.click(editButton);
+        const input = screen.getByDisplayValue('TestUser');
+        expect(input).toBeInTheDocument();
+        expect(input).toHaveFocus();
+      } else {
+        throw new Error('Edit button not found');
+      }
+    });
+
+    it('should save new name on Enter', () => {
+      render(<ChatRoom {...defaultProps} />);
+      const userItem = screen.getByText('TestUser (You)').closest('div.group');
+      const editButton = userItem?.querySelector('button');
+      if (editButton) fireEvent.click(editButton);
+      
+      const input = screen.getByDisplayValue('TestUser');
+      fireEvent.change(input, { target: { value: 'NewName' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      
+      expect(defaultProps.onRename).toHaveBeenCalledWith('NewName');
+    });
+
+    it('should cancel editing on Escape', () => {
+      render(<ChatRoom {...defaultProps} />);
+      const userItem = screen.getByText('TestUser (You)').closest('div.group');
+      const editButton = userItem?.querySelector('button');
+      if (editButton) fireEvent.click(editButton);
+      
+      const input = screen.getByDisplayValue('TestUser');
+      fireEvent.change(input, { target: { value: 'Draft' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+      
+      expect(defaultProps.onRename).not.toHaveBeenCalled();
+      expect(screen.queryByDisplayValue('TestUser')).not.toBeInTheDocument();
+      expect(screen.getByText('TestUser (You)')).toBeInTheDocument();
+    });
+
+    it('should allow host to edit room name', () => {
+      render(<ChatRoom {...defaultProps} isHost={true} />);
+      const roomHeader = screen.getAllByText('Test Room')[0].closest('div');
+      const editButton = roomHeader?.nextElementSibling?.querySelector('button');
+      
+      if (editButton) {
+        fireEvent.click(editButton);
+        const input = screen.getByDisplayValue('Test Room');
+        expect(input).toBeInTheDocument();
+        
+        fireEvent.change(input, { target: { value: 'New Room 1' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+        
+        expect(defaultProps.onRenameRoom).toHaveBeenCalledWith('New Room 1');
+      } else {
+        throw new Error('Room edit button not found');
+      }
+    });
+  });
+
+  describe('Mobile Sidebar', () => {
+    it('should toggle sidebar on mobile menu click', () => {
+      render(<ChatRoom {...defaultProps} />);
+      const header = screen.getAllByText('Test Room')[1].closest('header');
+      const menuBtn = header?.querySelector('button');
+      
+      if (menuBtn) {
+         fireEvent.click(menuBtn);
+         const backdrop = document.querySelector('.bg-black\\/50');
+         expect(backdrop).toBeInTheDocument();
+         
+         if (backdrop) {
+             fireEvent.click(backdrop);
+             expect(backdrop).not.toBeInTheDocument();
+         }
+      }
+    });
+  });
+
+  describe('Video Grid', () => {
+    it('should show video grid when isInCall is true', () => {
+       const mockStream = { getVideoTracks: () => [], getTracks: () => [] } as any;
+       render(<ChatRoom {...defaultProps} isInCall={true} localStream={mockStream} />);
+       const videoGrid = document.querySelector('.aspect-video');
+       expect(videoGrid).toBeInTheDocument();
+    });
+
+    it('should render "Camera Off" when stream has no video tracks', () => {
+       const stream = {
+           getVideoTracks: () => [],
+           getTracks: () => []
+       } as any;
+       render(<ChatRoom {...defaultProps} isInCall={true} localStream={stream} />);
+       expect(screen.getByText('Camera Off')).toBeInTheDocument();
+    });
+  });
 });

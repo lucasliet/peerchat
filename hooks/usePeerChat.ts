@@ -53,7 +53,7 @@ export const usePeerChat = (): UsePeerChatReturn => {
   const connectionsRef = useRef<Map<string, DataConnection>>(new Map());
   const mediaConnectionsRef = useRef<Map<string, MediaConnection>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
-  
+
   const stateRef = useRef(state);
   const myUserRef = useRef(myUser);
   const isInCallRef = useRef(isInCall);
@@ -152,13 +152,13 @@ export const usePeerChat = (): UsePeerChatReturn => {
   const updateMyUser = useCallback((updates: Partial<PeerUser>) => {
     const updated = { ...myUserRef.current, ...updates };
     setMyUser(updated);
-    
+
     setState(prev => {
       const newUsers = prev.users.map(u => u.id === updated.id ? updated : u);
-      const msg: NetworkMessage = stateRef.current.isHost 
+      const msg: NetworkMessage = stateRef.current.isHost
         ? { type: 'user_list_sync', payload: newUsers }
         : { type: 'user_update', payload: updated };
-      
+
       broadcast(msg);
       return { ...prev, users: newUsers };
     });
@@ -177,20 +177,20 @@ export const usePeerChat = (): UsePeerChatReturn => {
       case 'user_info':
         const newUser = msg.payload as PeerUser;
         if (isInCallRef.current && localStreamRef.current && newUser.peerId) {
-           const call = peerRef.current?.call(newUser.peerId, localStreamRef.current);
-           if (call) setupMediaCall(call);
+          const call = peerRef.current?.call(newUser.peerId, localStreamRef.current);
+          if (call) setupMediaCall(call);
         }
-        
-        setState(prev => {
-          const exists = prev.users.find(u => u.id === newUser.id);
-          if (exists) return prev;
+
+        const exists = stateRef.current.users.find(u => u.id === newUser.id);
+        if (!exists) {
           if (stateRef.current.isHost) {
             sendSystemMessage(`${newUser.name} joined the room`);
           }
-          const updated = [...prev.users, newUser];
+
+          const updated = [...stateRef.current.users, newUser];
           if (stateRef.current.isHost) broadcast({ type: 'user_list_sync', payload: updated });
-          return { ...prev, users: updated };
-        });
+          setState(prev => ({ ...prev, users: [...prev.users, newUser] }));
+        }
         break;
       case 'user_list_sync':
         const incomingUsers = msg.payload as PeerUser[];
@@ -227,11 +227,11 @@ export const usePeerChat = (): UsePeerChatReturn => {
     peer.on('error', err => {
       console.error('PeerJS Error:', err.type, err.message);
       if (err.type === 'peer-unavailable') {
-         setState(prev => ({ ...prev, status: 'error', error: `Room not found or host disconnected.` }));
+        setState(prev => ({ ...prev, status: 'error', error: `Room not found or host disconnected.` }));
       } else if (err.type === 'unavailable-id' && stateRef.current.isHost) {
-         // Silently handle ID collision for host
+        // Silently handle ID collision for host
       } else {
-         setState(prev => ({ ...prev, status: 'error', error: `Connection error: ${err.message}` }));
+        setState(prev => ({ ...prev, status: 'error', error: `Connection error: ${err.message}` }));
       }
     });
   };
@@ -245,13 +245,15 @@ export const usePeerChat = (): UsePeerChatReturn => {
     initPeerListeners(peer);
 
     peer.on('open', (id) => {
+      const hostUser = { ...myUserRef.current, peerId: id };
+      setMyUser(hostUser);
       setState(prev => ({
         ...prev,
         status: 'connected',
         roomId: code,
         roomName: `Room ${code}`,
         isHost: true,
-        users: [{ ...myUserRef.current, peerId: id }]
+        users: [hostUser]
       }));
     });
 
@@ -303,6 +305,14 @@ export const usePeerChat = (): UsePeerChatReturn => {
     });
   }, [handleData, cleanup]);
 
+  const createBlackVideoTrack = (): MediaStreamTrack => {
+    const canvas = Object.assign(document.createElement('canvas'), { width: 640, height: 480 });
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, 640, 480);
+    return canvas.captureStream(1).getVideoTracks()[0];
+  };
+
   const toggleCall = async () => {
     if (isInCall) {
       sendSystemMessage(`${myUser.name} left the call`);
@@ -316,15 +326,15 @@ export const usePeerChat = (): UsePeerChatReturn => {
       updateMyUser({ isMuted: false, isVideoOff: false });
     } else {
       try {
-        // Start with audio only, camera disabled
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const blackTrack = createBlackVideoTrack();
+        stream.addTrack(blackTrack);
         localStreamRef.current = stream;
         setLocalStream(stream);
         setIsInCall(true);
-        // Update user state to reflect camera is off
         updateMyUser({ isVideoOff: true });
         sendSystemMessage(`${myUser.name} started a call`);
-        
+
         stateRef.current.users.forEach(u => {
           if (u.peerId && u.peerId !== peerRef.current?.id) {
             const call = peerRef.current?.call(u.peerId, stream);
@@ -345,26 +355,26 @@ export const usePeerChat = (): UsePeerChatReturn => {
 
   const toggleVideo = async () => {
     if (!localStreamRef.current) return;
-    
+
     const turningOff = !myUser.isVideoOff;
-    
+
     if (turningOff) {
-      // Turn OFF: Stop the tracks to turn off the hardware light
+      const blackTrack = createBlackVideoTrack();
+
       const videoTracks = localStreamRef.current.getVideoTracks();
       videoTracks.forEach(track => {
         track.stop();
         localStreamRef.current?.removeTrack(track);
       });
+      localStreamRef.current.addTrack(blackTrack);
 
-      // Notify peers via WebRTC sender replacement
       mediaConnectionsRef.current.forEach(conn => {
         const sender = (conn.peerConnection as any).getSenders().find((s: any) => s.track?.kind === 'video');
         if (sender) {
-          sender.replaceTrack(null);
+          sender.replaceTrack(blackTrack);
         }
       });
-      
-      // Update local state (triggers re-render)
+
       setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
       updateMyUser({ isVideoOff: true });
 
@@ -373,23 +383,26 @@ export const usePeerChat = (): UsePeerChatReturn => {
       try {
         const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
         const newVideoTrack = videoStream.getVideoTracks()[0];
-        
+
         if (localStreamRef.current && newVideoTrack) {
+          const existingVideoTracks = localStreamRef.current.getVideoTracks();
+          existingVideoTracks.forEach(t => {
+            t.stop();
+            localStreamRef.current?.removeTrack(t);
+          });
           localStreamRef.current.addTrack(newVideoTrack);
-          
-          // Send new track to all peers
+
           mediaConnectionsRef.current.forEach(conn => {
-            const sender = (conn.peerConnection as any).getSenders().find((s: any) => s.track === null || s.track?.kind === 'video');
+            const sender = (conn.peerConnection as any).getSenders().find((s: any) => s.track?.kind === 'video');
             if (sender) {
               sender.replaceTrack(newVideoTrack);
             }
           });
 
-          // Update local state
           setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
           updateMyUser({ isVideoOff: false });
         }
-        
+
         // IMPORTANT: Stop all tracks from the temporary stream to release camera hardware
         // We only needed to extract the video track, so clean up the rest
         videoStream.getTracks().forEach(track => {
