@@ -371,5 +371,171 @@ describe('ChatRoom', () => {
        render(<ChatRoom {...defaultProps} isInCall={true} localStream={stream} />);
        expect(screen.getByText('Camera Off')).toBeInTheDocument();
     });
+
+    it('should render a video tile for each remote stream', () => {
+      const remoteStreams = [
+        { peerId: 'peer-2', stream: { getVideoTracks: () => [], getTracks: () => [] } as any },
+        { peerId: 'peer-3', stream: { getVideoTracks: () => [], getTracks: () => [] } as any },
+      ];
+      render(<ChatRoom {...defaultProps} isInCall={true} remoteStreams={remoteStreams} />);
+      const videoTiles = document.querySelectorAll('.aspect-video');
+      expect(videoTiles.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should show video grid even without a local stream when remote streams exist', () => {
+      const remoteStreams = [
+        { peerId: 'peer-2', stream: { getVideoTracks: () => [], getTracks: () => [] } as any },
+      ];
+      render(<ChatRoom {...defaultProps} isInCall={false} localStream={null} remoteStreams={remoteStreams} />);
+      const videoGrid = document.querySelector('.aspect-video');
+      expect(videoGrid).toBeInTheDocument();
+    });
+  });
+
+  describe('Guest restrictions', () => {
+    it('should not show the room rename button for guests', () => {
+      render(<ChatRoom {...defaultProps} isHost={false} />);
+      const editButtons = document.querySelectorAll('button svg.lucide-edit');
+      expect(editButtons.length).toBe(0);
+    });
+
+    it('should allow host to trigger room rename (edit button exists)', () => {
+      render(<ChatRoom {...defaultProps} isHost={true} />);
+      const roomHeading = screen.getByRole('heading', { name: /test room/i, level: 2 });
+      const sidebarTop = roomHeading.closest('div')?.parentElement?.parentElement;
+      const btns = sidebarTop?.querySelectorAll('button') ?? [];
+      const editBtn = Array.from(btns).find(b => !b.className.includes('md:hidden'));
+      if (editBtn) {
+        fireEvent.click(editBtn);
+        expect(screen.getByDisplayValue('Test Room')).toBeInTheDocument();
+      } else {
+        throw new Error('Room edit button not found for host');
+      }
+    });
+  });
+
+  describe('User status indicators', () => {
+    it('should display MicOff icon when user is muted', () => {
+      const mutedUsers: typeof mockUsers = [
+        { ...mockUser, isMuted: true },
+        mockUsers[1],
+      ];
+      render(<ChatRoom {...defaultProps} users={mutedUsers} currentUser={{ ...mockUser, isMuted: true }} />);
+      const micOffIcons = document.querySelectorAll('.lucide-mic-off');
+      expect(micOffIcons.length).toBeGreaterThan(0);
+    });
+
+    it('should display VideoOff icon when user has camera off', () => {
+      const videoOffUsers: typeof mockUsers = [
+        { ...mockUser, isVideoOff: true },
+        mockUsers[1],
+      ];
+      render(<ChatRoom {...defaultProps} users={videoOffUsers} currentUser={{ ...mockUser, isVideoOff: true }} />);
+      const videoOffIcons = document.querySelectorAll('.lucide-video-off');
+      expect(videoOffIcons.length).toBeGreaterThan(0);
+    });
+
+    it('should not display status icons for unmuted user with camera on', () => {
+      render(<ChatRoom {...defaultProps} />);
+      const micOffIcons = document.querySelectorAll('.lucide-mic-off');
+      expect(micOffIcons.length).toBe(0);
+    });
+  });
+
+  describe('Empty state', () => {
+    it('should show empty state when there are no messages', () => {
+      render(<ChatRoom {...defaultProps} messages={[]} />);
+      expect(screen.getByText('No messages yet. Start the conversation!')).toBeInTheDocument();
+    });
+
+    it('should not show empty state when there are messages', () => {
+      render(<ChatRoom {...defaultProps} />);
+      expect(screen.queryByText('No messages yet. Start the conversation!')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Call controls', () => {
+    it('should call onToggleAudio when mute button is clicked during a call', () => {
+      render(<ChatRoom {...defaultProps} isInCall={true} />);
+      const buttons = screen.getAllByRole('button');
+      const muteBtn = buttons.find(b => b.querySelector('.lucide-mic') || b.querySelector('.lucide-mic-off'));
+      if (muteBtn) fireEvent.click(muteBtn);
+      expect(defaultProps.onToggleAudio).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call onToggleVideo when camera button is clicked during a call', () => {
+      render(<ChatRoom {...defaultProps} isInCall={true} />);
+      const buttons = screen.getAllByRole('button');
+      const videoBtn = buttons.find(b => b.querySelector('.lucide-video') || b.querySelector('.lucide-video-off'));
+      if (videoBtn) fireEvent.click(videoBtn);
+      expect(defaultProps.onToggleVideo).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call onToggleCall (end call) when PhoneOff button is clicked', () => {
+      render(<ChatRoom {...defaultProps} isInCall={true} />);
+      const buttons = screen.getAllByRole('button');
+      const endCallBtn = buttons.find(b => b.querySelector('.lucide-phone-off'));
+      if (endCallBtn) fireEvent.click(endCallBtn);
+      expect(defaultProps.onToggleCall).toHaveBeenCalledTimes(1);
+    });
+
+    it('should highlight mute button when user is muted', () => {
+      const mutedUser = { ...mockUser, isMuted: true };
+      render(<ChatRoom {...defaultProps} isInCall={true} currentUser={mutedUser} />);
+      const muteBtn = document.querySelector('.lucide-mic-off')?.closest('button');
+      expect(muteBtn?.className).toMatch(/bg-red-500/);
+    });
+
+    it('should highlight video button when camera is off', () => {
+      const videoOffUser = { ...mockUser, isVideoOff: true };
+      render(<ChatRoom {...defaultProps} isInCall={true} currentUser={videoOffUser} />);
+      const videoBtn = document.querySelector('.lucide-video-off')?.closest('button');
+      expect(videoBtn?.className).toMatch(/bg-red-500/);
+    });
+  });
+
+  describe('Error banner', () => {
+    it('should call onClearError when the X button on the error banner is clicked', () => {
+      render(<ChatRoom {...defaultProps} error="Something went wrong" />);
+      const closeBtn = screen.getByText('Something went wrong')
+        .closest('div')
+        ?.querySelector('button');
+      if (closeBtn) fireEvent.click(closeBtn);
+      expect(defaultProps.onClearError).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Message alignment', () => {
+    it('should render self messages with reversed flex direction', () => {
+      render(<ChatRoom {...defaultProps} />);
+      const selfMsg = screen.getByText('Hello, world!').closest('[class*="flex-row-reverse"]');
+      expect(selfMsg).toBeInTheDocument();
+    });
+
+    it('should render received messages without reversed flex direction', () => {
+      const receivedMsg: typeof mockMessages = [{
+        id: 'msg-3',
+        senderId: 'user-2',
+        senderName: 'OtherUser',
+        content: 'Received message',
+        timestamp: Date.now(),
+        type: 'text',
+        isSelf: false,
+      }];
+      render(<ChatRoom {...defaultProps} messages={receivedMsg} />);
+      const msgEl = screen.getByText('Received message').closest('[class]');
+      const parent = msgEl?.parentElement;
+      expect(parent?.className).not.toMatch(/flex-row-reverse/);
+    });
+  });
+
+  describe('Room code copy', () => {
+    it('should show Check icon briefly after copying', async () => {
+      render(<ChatRoom {...defaultProps} />);
+      const copyButton = screen.getByText('1234').closest('button');
+      if (copyButton) fireEvent.click(copyButton);
+      const checkIcon = document.querySelector('.lucide-check');
+      expect(checkIcon).toBeInTheDocument();
+    });
   });
 });
