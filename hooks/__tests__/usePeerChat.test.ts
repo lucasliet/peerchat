@@ -5,9 +5,8 @@ import { usePeerChat } from '../usePeerChat';
 // Mock PeerJS - must be hoisted, so can't reference external variables
 let mockPeerInstance: any;
 vi.mock('peerjs', () => {
-  const handlers: Record<string, Function[]> = {};
-  
   const MockPeer = vi.fn(function(this: any, id?: string) {
+    const handlers: Record<string, Function[]> = {};
     this.id = id || 'test-peer-id';
     this.handlers = handlers;
     this.on = vi.fn((event: string, handler: Function) => {
@@ -1005,6 +1004,525 @@ describe('usePeerChat - Connection Status', () => {
       result.current.leaveRoom();
     });
     
+    expect(result.current.status).toBe('idle');
+  });
+});
+
+describe('usePeerChat - handleData Protocol', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('should rebroadcast chat to all peers except sender when host', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+
+    const connA = { peer: 'peer-A', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    await act(async () => { mockPeerInstance._trigger('connection', connA); });
+    const connAOpen = (connA.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => connAOpen());
+
+    const connB = { peer: 'peer-B', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    await act(async () => { mockPeerInstance._trigger('connection', connB); });
+    const connBOpen = (connB.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => connBOpen());
+
+    const dataHandlerA = (connA.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+    const chatMsg = { type: 'chat', payload: { id: 'msg1', content: 'Hello', senderId: 'peer-A', senderName: 'A', timestamp: Date.now(), type: 'text', isSelf: false } };
+    act(() => { dataHandlerA(chatMsg); });
+
+    expect(connB.send).toHaveBeenCalledWith(chatMsg);
+    expect(connA.send).not.toHaveBeenCalledWith(chatMsg);
+    expect(result.current.messages.some(m => m.content === 'Hello')).toBe(true);
+  });
+
+  it('should only add chat to state without broadcast when guest', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.joinRoom('1234'); });
+    act(() => { mockPeerInstance._trigger('open', 'guest-id'); });
+
+    const hostConn = (mockPeerInstance.connect as any).mock.results[0].value;
+    const openHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+    const dataHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+
+    const chatMsg = { type: 'chat', payload: { id: 'msg1', content: 'From host', senderId: 'host', senderName: 'Host', timestamp: Date.now(), type: 'text', isSelf: false } };
+    act(() => { dataHandler(chatMsg); });
+
+    expect(result.current.messages.some(m => m.content === 'From host')).toBe(true);
+    const chatSentByGuest = (hostConn.send as any).mock.calls.filter((c: any[]) => c[0]?.type === 'chat');
+    expect(chatSentByGuest).toHaveLength(0);
+  });
+
+  it('should add new user + broadcast user_list_sync when host receives user_info', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+
+    const conn = { peer: 'guest-peer', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    await act(async () => { mockPeerInstance._trigger('connection', conn); });
+    const openHandler = (conn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+
+    const dataHandler = (conn.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+    const guestUser = { id: 'guest-id', name: 'GuestUser', color: 'bg-red-500', isMuted: false, isVideoOff: false, peerId: 'guest-peer' };
+    act(() => { dataHandler({ type: 'user_info', payload: guestUser }); });
+
+    await waitFor(() => {
+      expect(result.current.users.some(u => u.id === 'guest-id')).toBe(true);
+      expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'user_list_sync' }));
+      expect(result.current.messages.some(m => m.content.includes('GuestUser'))).toBe(true);
+    });
+  });
+
+  it('should not duplicate user when host receives user_info for existing user', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+
+    const conn = { peer: 'guest-peer', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    await act(async () => { mockPeerInstance._trigger('connection', conn); });
+    const openHandler = (conn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+
+    const dataHandler = (conn.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+    const guestUser = { id: 'guest-id', name: 'GuestUser', color: 'bg-red-500', isMuted: false, isVideoOff: false, peerId: 'guest-peer' };
+    act(() => { dataHandler({ type: 'user_info', payload: guestUser }); });
+    act(() => { dataHandler({ type: 'user_info', payload: guestUser }); });
+
+    await waitFor(() => {
+      expect(result.current.users.filter(u => u.id === 'guest-id')).toHaveLength(1);
+    });
+  });
+
+  it('should replace full user list on user_list_sync as guest', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.joinRoom('1234'); });
+    act(() => { mockPeerInstance._trigger('open', 'guest-id'); });
+
+    const hostConn = (mockPeerInstance.connect as any).mock.results[0].value;
+    const openHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+    const dataHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+
+    const users = [
+      { id: 'host', name: 'Host', color: 'bg-green-500', isMuted: false, isVideoOff: false, peerId: 'host-peer' },
+      { id: 'guest-id', name: 'Guest', color: 'bg-blue-500', isMuted: false, isVideoOff: false, peerId: 'guest-peer' },
+    ];
+    act(() => { dataHandler({ type: 'user_list_sync', payload: users }); });
+
+    await waitFor(() => {
+      expect(result.current.users).toHaveLength(2);
+      expect(result.current.users[0].id).toBe('host');
+      expect(result.current.users[1].id).toBe('guest-id');
+    });
+  });
+
+  it('should update user + rebroadcast on user_update as host', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+
+    const connA = { peer: 'peer-A', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    const connB = { peer: 'peer-B', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    await act(async () => { mockPeerInstance._trigger('connection', connA); });
+    await act(async () => { mockPeerInstance._trigger('connection', connB); });
+
+    const openA = (connA.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    const openB = (connB.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => { openA(); openB(); });
+
+    const dataA = (connA.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+    const userA = { id: 'user-a', name: 'UserA', color: 'bg-red-500', isMuted: false, isVideoOff: false, peerId: 'peer-A' };
+    act(() => { dataA({ type: 'user_info', payload: userA }); });
+
+    await waitFor(() => { expect(result.current.users.some(u => u.id === 'user-a')).toBe(true); });
+
+    act(() => { dataA({ type: 'user_update', payload: { ...userA, name: 'UpdatedA' } }); });
+
+    await waitFor(() => {
+      expect(result.current.users.find(u => u.id === 'user-a')?.name).toBe('UpdatedA');
+      expect(connB.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'user_list_sync' }));
+    });
+  });
+
+  it('should update roomName on room_update', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.joinRoom('1234'); });
+    act(() => { mockPeerInstance._trigger('open', 'guest-id'); });
+
+    const hostConn = (mockPeerInstance.connect as any).mock.results[0].value;
+    const openHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+    const dataHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+
+    act(() => { dataHandler({ type: 'room_update', payload: { name: 'New Room Name' } }); });
+
+    await waitFor(() => {
+      expect(result.current.roomName).toBe('New Room Name');
+    });
+  });
+
+  it('should not crash on unknown message type', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.joinRoom('1234'); });
+    act(() => { mockPeerInstance._trigger('open', 'guest-id'); });
+
+    const hostConn = (mockPeerInstance.connect as any).mock.results[0].value;
+    const openHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+    const dataHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+
+    expect(() => { act(() => { dataHandler({ type: 'UNKNOWN_TYPE', payload: {} }); }); }).not.toThrow();
+    expect(result.current.error).toBeNull();
+  });
+
+  it('should not crash on malformed payload', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.joinRoom('1234'); });
+    act(() => { mockPeerInstance._trigger('open', 'guest-id'); });
+
+    const hostConn = (mockPeerInstance.connect as any).mock.results[0].value;
+    const openHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+    const dataHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+
+    expect(() => { act(() => { dataHandler({ type: 'chat', payload: null }); }); }).not.toThrow();
+    expect(() => { act(() => { dataHandler(null); }); }).not.toThrow();
+  });
+});
+
+describe('usePeerChat - Broadcast', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('should send to all open connections', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+
+    const connA = { peer: 'peer-A', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    const connB = { peer: 'peer-B', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    await act(async () => { mockPeerInstance._trigger('connection', connA); });
+    await act(async () => { mockPeerInstance._trigger('connection', connB); });
+    const openA = (connA.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    const openB = (connB.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => { openA(); openB(); });
+
+    act(() => { result.current.sendMessage('broadcast test'); });
+
+    expect(connA.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat' }));
+    expect(connB.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat' }));
+  });
+
+  it('should skip closed connections (conn.open === false)', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+
+    const connA = { peer: 'peer-A', on: vi.fn(), send: vi.fn(), open: false, close: vi.fn() };
+    const connB = { peer: 'peer-B', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    await act(async () => { mockPeerInstance._trigger('connection', connA); });
+    await act(async () => { mockPeerInstance._trigger('connection', connB); });
+    const openB = (connB.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => { openB(); });
+
+    act(() => { result.current.sendMessage('skip closed'); });
+
+    const chatCallsA = (connA.send as any).mock.calls.filter((c: any[]) => c[0]?.type === 'chat');
+    expect(chatCallsA).toHaveLength(0);
+    expect(connB.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat' }));
+  });
+});
+
+describe('usePeerChat - Host-Guest Connection Flow', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('should send user_info + user_list_sync + room_update on guest conn.open', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+
+    const conn = { peer: 'guest-peer', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    await act(async () => { mockPeerInstance._trigger('connection', conn); });
+    const openHandler = (conn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+
+    expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'user_info' }));
+    expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'user_list_sync' }));
+    expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'room_update' }));
+  });
+
+  it('should set status to error when guest connection to host closes', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.joinRoom('1234'); });
+    act(() => { mockPeerInstance._trigger('open', 'guest-id'); });
+
+    const hostConn = (mockPeerInstance.connect as any).mock.results[0].value;
+    const openHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+    const closeHandler = (hostConn.on as any).mock.calls.find((c: any) => c[0] === 'close')[1];
+    act(() => closeHandler());
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('error');
+      expect(result.current.error).toBe('Disconnected from host.');
+    });
+  });
+
+  it('should remove guest and emit system message when guest disconnects from host', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+
+    const conn = { peer: 'guest-peer', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    await act(async () => { mockPeerInstance._trigger('connection', conn); });
+    const openHandler = (conn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+    const dataHandler = (conn.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+    const guestUser = { id: 'guest-id', name: 'Departing', color: 'bg-red-500', isMuted: false, isVideoOff: false, peerId: 'guest-peer' };
+    act(() => { dataHandler({ type: 'user_info', payload: guestUser }); });
+
+    await waitFor(() => { expect(result.current.users.some(u => u.id === 'guest-id')).toBe(true); });
+
+    const closeHandler = (conn.on as any).mock.calls.find((c: any) => c[0] === 'close')[1];
+    act(() => closeHandler());
+
+    await waitFor(() => {
+      expect(result.current.users.some(u => u.id === 'guest-id')).toBe(false);
+      expect(result.current.messages.some(m => m.content.includes('Departing') && m.content.includes('left'))).toBe(true);
+    });
+  });
+});
+
+describe('usePeerChat - joinRoom Edge Cases', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('should accept code "0000" (4 digits)', () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.joinRoom('0000'); });
+    expect(result.current.status).toBe('connecting');
+    expect(result.current.roomId).toBe('0000');
+  });
+
+  it('should reject code "12345" (5 chars)', () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.joinRoom('12345'); });
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('should reject empty code', () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.joinRoom(''); });
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('should accept code "abcd" (4 chars, hook only validates length)', () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.joinRoom('abcd'); });
+    expect(result.current.status).toBe('connecting');
+  });
+});
+
+describe('usePeerChat - sendMessage Edge Cases', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('should add empty string to messages (no hook validation)', () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.sendMessage(''); });
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0].content).toBe('');
+  });
+
+  it('should handle emoji and unicode characters', () => {
+    const { result } = renderHook(() => usePeerChat());
+    const msg = '🚀 héllo wörld 你好 🎉';
+    act(() => { result.current.sendMessage(msg); });
+    expect(result.current.messages[0].content).toBe(msg);
+  });
+
+  it('should handle 10000-char message', () => {
+    const { result } = renderHook(() => usePeerChat());
+    const longMsg = 'x'.repeat(10000);
+    act(() => { result.current.sendMessage(longMsg); });
+    expect(result.current.messages[0].content.length).toBe(10000);
+  });
+
+  it('should add message locally even without connections', () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.sendMessage('no peers'); });
+    expect(result.current.messages[0].isSelf).toBe(true);
+    expect(result.current.messages[0].content).toBe('no peers');
+  });
+});
+
+describe('usePeerChat - Rename Edge Cases', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('should broadcast room_update when host renames room', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+
+    const conn = { peer: 'guest-peer', on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+    await act(async () => { mockPeerInstance._trigger('connection', conn); });
+    const openHandler = (conn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+    act(() => openHandler());
+
+    act(() => { result.current.renameRoom('My New Room'); });
+
+    expect(result.current.roomName).toBe('My New Room');
+    expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'room_update', payload: { name: 'My New Room' } }));
+  });
+
+  it('should not change state or broadcast when guest tries to rename room', () => {
+    const { result } = renderHook(() => usePeerChat());
+    const originalName = result.current.roomName;
+    act(() => { result.current.renameRoom('Attempted Name'); });
+    expect(result.current.roomName).toBe(originalName);
+  });
+});
+
+describe('usePeerChat - Media Edge Cases', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('should return early without crash when toggleVideo called without localStream', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    expect(result.current.localStream).toBeNull();
+    await act(async () => { await result.current.toggleVideo(); });
+    expect(result.current.localStream).toBeNull();
+    expect(mockGetUserMedia).not.toHaveBeenCalled();
+  });
+
+  it('should call replaceTrack on all peer senders when toggling video ON', async () => {
+    const mockSender = { track: { kind: 'video', stop: vi.fn() }, replaceTrack: vi.fn() };
+    const mockMediaConn = {
+      on: vi.fn(),
+      close: vi.fn(),
+      peer: 'peer-A',
+      answer: vi.fn(),
+      peerConnection: { getSenders: vi.fn(() => [mockSender]) },
+    };
+
+    const audioTrack = { enabled: true, kind: 'audio', stop: vi.fn() };
+    const mockStream = {
+      getTracks: vi.fn(() => [audioTrack]),
+      getAudioTracks: vi.fn(() => [audioTrack]),
+      getVideoTracks: vi.fn(() => []),
+      addTrack: vi.fn(),
+      removeTrack: vi.fn(),
+    } as any;
+    mockGetUserMedia.mockResolvedValue(mockStream);
+
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+    await act(async () => { await result.current.toggleCall(); });
+    await waitFor(() => { expect(result.current.isInCall).toBe(true); });
+
+    mockPeerInstance.call.mockReturnValue(mockMediaConn);
+
+    const newVideoTrack = { kind: 'video', stop: vi.fn(), enabled: true, id: 'new-video' };
+    mockGetUserMedia.mockResolvedValueOnce({
+      getTracks: vi.fn(() => [newVideoTrack]),
+      getVideoTracks: vi.fn(() => [newVideoTrack]),
+    });
+
+    mockPeerInstance._trigger('call', mockMediaConn);
+    const streamH = (mockMediaConn.on as any).mock.calls.find((c: any) => c[0] === 'stream');
+    if (streamH) act(() => streamH[1](new MediaStream()));
+
+    await act(async () => { await result.current.toggleVideo(); });
+
+    await waitFor(() => {
+      expect(mockSender.replaceTrack).toHaveBeenCalledWith(newVideoTrack);
+    }, { timeout: 3000 });
+  });
+
+  it('should call each peer with call() when starting a call with multiple peers', async () => {
+    const mockStream = {
+      getTracks: vi.fn(() => []),
+      getAudioTracks: vi.fn(() => []),
+      getVideoTracks: vi.fn(() => []),
+      addTrack: vi.fn(),
+      removeTrack: vi.fn(),
+    } as any;
+    mockGetUserMedia.mockResolvedValue(mockStream);
+
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+
+    for (const peerName of ['peer-A', 'peer-B']) {
+      const conn = { peer: peerName, on: vi.fn(), send: vi.fn(), open: true, close: vi.fn() };
+      await act(async () => { mockPeerInstance._trigger('connection', conn); });
+      const openH = (conn.on as any).mock.calls.find((c: any) => c[0] === 'open')[1];
+      act(() => openH());
+      const dataH = (conn.on as any).mock.calls.find((c: any) => c[0] === 'data')[1];
+      const user = { id: peerName, name: peerName, color: 'bg-red-500', isMuted: false, isVideoOff: false, peerId: peerName };
+      act(() => { dataH({ type: 'user_info', payload: user }); });
+    }
+
+    await waitFor(() => { expect(result.current.users).toHaveLength(3); });
+
+    await act(async () => { await result.current.toggleCall(); });
+
+    await waitFor(() => {
+      const callArgs = (mockPeerInstance.call as any).mock.calls.map((c: any[]) => c[0]);
+      expect(callArgs).toContain('peer-A');
+      expect(callArgs).toContain('peer-B');
+    });
+  });
+});
+
+describe('usePeerChat - Cleanup Edge Cases', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('should stop tracks and close all connections on leaveRoom during call', async () => {
+    const stopTrack = vi.fn();
+    const mockStream = {
+      getTracks: vi.fn(() => [{ stop: stopTrack, kind: 'audio' }]),
+      getAudioTracks: vi.fn(() => [{ stop: stopTrack, enabled: true }]),
+      getVideoTracks: vi.fn(() => []),
+      addTrack: vi.fn(),
+      removeTrack: vi.fn(),
+    } as any;
+    mockGetUserMedia.mockResolvedValue(mockStream);
+
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    act(() => { mockPeerInstance._trigger('open', 'host-id'); });
+    await act(async () => { await result.current.toggleCall(); });
+
+    await waitFor(() => { expect(result.current.isInCall).toBe(true); });
+
+    const destroySpy = vi.spyOn(mockPeerInstance, 'destroy');
+
+    act(() => { result.current.leaveRoom(); });
+
+    await waitFor(() => {
+      expect(stopTrack).toHaveBeenCalled();
+      expect(destroySpy).toHaveBeenCalled();
+      expect(result.current.isInCall).toBe(false);
+      expect(result.current.localStream).toBeNull();
+      expect(result.current.status).toBe('idle');
+    });
+  });
+
+  it('should not crash on multiple consecutive leaveRoom calls', async () => {
+    const { result } = renderHook(() => usePeerChat());
+    act(() => { result.current.createRoom(); });
+    expect(() => {
+      act(() => {
+        result.current.leaveRoom();
+        result.current.leaveRoom();
+        result.current.leaveRoom();
+      });
+    }).not.toThrow();
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('should be a safe no-op when leaveRoom called without connecting', () => {
+    const { result } = renderHook(() => usePeerChat());
+    expect(() => { act(() => { result.current.leaveRoom(); }); }).not.toThrow();
     expect(result.current.status).toBe('idle');
   });
 });

@@ -165,6 +165,7 @@ export const usePeerChat = (): UsePeerChatReturn => {
   }, [broadcast]);
 
   const handleData = useCallback((data: unknown, conn: DataConnection) => {
+    if (!data || typeof data !== 'object') return;
     const msg = data as NetworkMessage;
     switch (msg.type) {
       case 'chat':
@@ -299,8 +300,8 @@ export const usePeerChat = (): UsePeerChatReturn => {
       });
       conn.on('data', d => handleData(d, conn));
       conn.on('close', () => {
-        setState(prev => ({ ...prev, status: 'error', error: 'Disconnected from host.' }));
         cleanup();
+        setState(prev => ({ ...prev, status: 'error', error: 'Disconnected from host.' }));
       });
     });
   }, [handleData, cleanup]);
