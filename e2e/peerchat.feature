@@ -123,9 +123,9 @@ Feature: PeerChat – Serverless P2P Chat
   Scenario: User renames themselves and the host sees the updated name
     Given a host and a guest are connected in the same room
     When the guest clicks the edit icon next to their name in the sidebar
-    And the guest types "GuestRenomeado" and presses Enter
-    Then the guest sidebar shows "GuestRenomeado (You)"
-    And the host sidebar shows "GuestRenomeado" for that user
+    And the guest types "GstRenome" and presses Enter
+    Then the guest sidebar shows "GstRenome (You)"
+    And the host sidebar shows "GstRenome" for that user
 
   Scenario: Editing name is cancelled when Escape is pressed
     Given I am in a room
@@ -186,3 +186,193 @@ Feature: PeerChat – Serverless P2P Chat
   Scenario: No error banner is shown when error is null
     Given I am in a room with no error
     Then no error banner is visible
+
+  # ──────────────────────────────────────────────
+  # MULTI-USUÁRIO (3+ PEERS)
+  # ──────────────────────────────────────────────
+
+  @multi-user @slow
+  Scenario: Third guest joins a room with two existing participants
+    Given a host and a guest are connected in the same room
+    When a second guest joins the room
+    Then all three participants see "3 ACTIVE USERS" in the header
+    And all three participants are listed in the sidebar
+
+  @multi-user @slow
+  Scenario: Guest message is relayed by host to all other guests
+    Given a host and two guests are connected in the same room
+    When the first guest types "hi everyone" in the message input and presses Enter
+    Then the second guest also sees "hi everyone" in the chat
+
+  @multi-user @slow
+  Scenario: One guest leaves a multi-user room and the others are notified
+    Given a host and two guests are connected in the same room
+    When the first guest clicks "Leave Room"
+    Then the host sees "2 ACTIVE USERS" in the header
+    And the host sees a system message containing "LEFT THE ROOM"
+
+  @multi-user @slow
+  Scenario: Late joiner receives full room state including renamed room
+    Given a host and a guest are connected in the same room
+    And the host has renamed the room to "Project Sync"
+    When a second guest joins the room
+    Then the second guest sees the room name as "Project Sync"
+
+  # ──────────────────────────────────────────────
+  # PERMISSÕES E FALHAS DE HARDWARE DE MÍDIA
+  # ──────────────────────────────────────────────
+
+  @media-permissions
+  Scenario: Starting a call when microphone permission is denied shows an error
+    Given I am the host of a room
+    And the browser has denied media access
+    When I click "Start Call"
+    Then I see the error banner "Could not access camera/mic."
+    And the call controls bar is not shown
+
+  @media-permissions
+  Scenario: Camera hardware failure during an active call shows an error
+    Given I am in an active call
+    When the camera hardware disconnects
+    Then I see the error banner "Failed to access camera"
+
+  # ──────────────────────────────────────────────
+  # VÍDEO – COMPORTAMENTO DO TILE
+  # ──────────────────────────────────────────────
+
+  @video
+  Scenario: Video tile shows "Camera Off" placeholder when video is disabled
+    Given I am in an active call
+    Then I see a video tile with "Camera Off" text
+
+  @video @slow
+  Scenario: Remote user's video tile disappears when they end the call
+    Given a host and a guest are in an active call
+    When the guest ends the call
+    Then the guest's video tile is removed from the host's video grid
+
+  # ──────────────────────────────────────────────
+  # DESCONEXÃO INESPERADA / FECHAMENTO DE ABA
+  # ──────────────────────────────────────────────
+
+  @disconnection @slow
+  Scenario: Host closes the browser tab abruptly
+    Given a host and a guest are connected in the same room
+    When the host closes the browser tab abruptly
+    Then the guest sees the error "Disconnected from host."
+
+  @disconnection @slow
+  Scenario: Guest abruptly closes the browser tab
+    Given a host and a guest are connected in the same room
+    When the guest closes the browser tab abruptly
+    Then the host sees a system message containing "LEFT THE ROOM"
+    And the host sees "1 ACTIVE USERS" in the header
+
+  @disconnection @slow
+  Scenario: Page refresh mid-session returns user to landing page
+    Given a host and a guest are connected in the same room
+    When the guest refreshes the browser tab
+    Then the guest sees the "PeerChat" heading
+    And the host sees a system message containing "LEFT THE ROOM"
+
+  # ──────────────────────────────────────────────
+  # RACE CONDITIONS E ESTADO
+  # ──────────────────────────────────────────────
+
+  @race-condition
+  Scenario: Rapid toggle of mute button does not desync UI from actual state
+    Given I am in an active call
+    When I click the mute button 5 times rapidly
+    Then the final mute state is consistent between UI and audio track
+
+  @race-condition
+  Scenario: Double-clicking "Start Call" does not create duplicate media connections
+    Given I am the host of a room
+    When I double-click "Start Call"
+    Then only one video tile for myself appears
+    And the call controls bar is visible
+
+  # ──────────────────────────────────────────────
+  # GUEST NÃO PODE RENOMEAR SALA
+  # ──────────────────────────────────────────────
+
+  Scenario: Guest does not see the room name edit icon in the sidebar
+    Given a host and a guest are connected in the same room
+    Then the guest does not see the room name edit button
+
+  # ──────────────────────────────────────────────
+  # COPY ROOM CODE
+  # ──────────────────────────────────────────────
+
+  Scenario: Host copies the room code to clipboard via the copy button
+    Given I am the host of a room
+    When I click the copy room code button
+    Then a visual confirmation of the copy action is shown
+
+  Scenario: Copied room code is exactly 4 digits
+    Given I am the host of a room
+    When I click the copy room code button
+    Then the clipboard contains exactly 4 numeric characters
+
+  # ──────────────────────────────────────────────
+  # SEGURANÇA – INJEÇÃO E XSS
+  # ──────────────────────────────────────────────
+
+  @security
+  Scenario: Message with HTML is rendered as plain text
+    Given a host and a guest are connected in the same room
+    When the host sends the message "<script>alert('xss')</script>"
+    Then the guest sees the raw text "<script>alert('xss')</script>" in the chat
+    And no script is executed in the browser
+
+  # ──────────────────────────────────────────────
+  # MENSAGENS – EDGE CASES
+  # ──────────────────────────────────────────────
+
+  Scenario: Very long message is displayed without breaking the layout
+    Given a host and a guest are connected in the same room
+    When the host sends a 500-character message
+    Then the message is fully displayed in the guest's chat
+
+  Scenario: Chat auto-scrolls to the latest message
+    Given a host and a guest are connected in the same room
+    When the host sends 20 messages in sequence
+    Then the last message is visible in the guest's chat
+
+  Scenario: System messages are visually distinct from user messages
+    Given a host is in a room
+    When a guest joins the room
+    Then the system message has a different visual style than user messages
+
+  # ──────────────────────────────────────────────
+  # CICLO DE VIDA E ABA
+  # ──────────────────────────────────────────────
+
+  @slow
+  Scenario: Returning to the tab after backgrounding shows current state
+    Given a host and a guest are connected in the same room
+    When the guest backgrounds the tab and returns
+    Then the guest can still send messages
+
+  # ──────────────────────────────────────────────
+  # ACESSIBILIDADE / UX
+  # ──────────────────────────────────────────────
+
+  Scenario: Pressing Enter on the room code input triggers Join Room
+    Given I am on the landing page
+    When I type "9999" in the room code input
+    And I press Enter on the room code input
+    Then I see the error banner "Room not found or host disconnected."
+
+  Scenario: Empty name is not saved when editing
+    Given I am the host of a room
+    When I click the edit icon next to my name
+    And I clear the name input and press Enter
+    Then my original name is still displayed
+
+  @slow
+  Scenario: Username with emojis renders correctly in the sidebar
+    Given a host and a guest are connected in the same room
+    When the guest renames themselves to "Go 🚀🎯"
+    Then the guest sidebar shows "Go 🚀🎯 (You)"
+    And the host sidebar shows "Go 🚀🎯"

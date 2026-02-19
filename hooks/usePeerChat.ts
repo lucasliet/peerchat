@@ -246,6 +246,7 @@ export const usePeerChat = (): UsePeerChatReturn => {
     initPeerListeners(peer);
 
     peer.on('open', (id) => {
+      if ((import.meta as any).env?.DEV) (window as any).__peer = peer;
       const hostUser = { ...myUserRef.current, peerId: id };
       setMyUser(hostUser);
       setState(prev => ({
@@ -289,6 +290,7 @@ export const usePeerChat = (): UsePeerChatReturn => {
     initPeerListeners(peer);
 
     peer.on('open', (id) => {
+      if ((import.meta as any).env?.DEV) (window as any).__peer = peer;
       const hostId = `${APP_PREFIX}${code}`;
       const conn = peer.connect(hostId);
       conn.on('open', () => {

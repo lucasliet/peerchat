@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "playwright:install": "PLAYWRIGHT_BROWSERS_PATH=.playwright playwright install chromium",
+    "test:e2e": "PLAYWRIGHT_BROWSERS_PATH=.playwright bddgen && PLAYWRIGHT_BROWSERS_PATH=.playwright playwright test",
+    "test:e2e:ui": "PLAYWRIGHT_BROWSERS_PATH=.playwright bddgen && PLAYWRIGHT_BROWSERS_PATH=.playwright playwright test --ui",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "lucide-react": "^0.463.0",
@@ -18,13 +22,16 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.2.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "jsdom": "^28.0.0",
+    "playwright-bdd": "^8.4.2",
     "typescript": "^5.6.3",
     "vite": "^6.0.0",
     "vitest": "^4.0.18"

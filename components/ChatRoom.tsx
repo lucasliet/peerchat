@@ -154,7 +154,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 <button onClick={handleCancelEdit} className="p-1 hover:bg-gray-800 rounded-full text-red-500"><X className="w-4 h-4" /></button>
               </>
             ) : (
-              props.isHost && <button onClick={handleStartEditRoom} className="p-1 hover:bg-gray-800 rounded-full text-gray-500"><Edit className="w-4 h-4" /></button>
+              props.isHost && <button aria-label="Edit room name" onClick={handleStartEditRoom} className="p-1 hover:bg-gray-800 rounded-full text-gray-500"><Edit className="w-4 h-4" /></button>
             )}
             <button onClick={() => setSidebarOpen(false)} className="md:hidden p-1 hover:bg-gray-800 rounded-full"><X className="w-5 h-5" /></button>
           </div>
@@ -162,8 +162,8 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
 
         <div className="p-4 border-b border-gray-800">
           <p className="text-[10px] font-bold text-gray-500 uppercase mb-2 tracking-widest">Room Code</p>
-          <button onClick={() => { navigator.clipboard.writeText(props.roomId); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="w-full flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors group">
-            <span className="text-xl font-mono font-bold text-emerald-400">{props.roomId}</span>
+          <button aria-label="Copy room code" onClick={() => { navigator.clipboard.writeText(props.roomId); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="w-full flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors group">
+            <span data-testid="room-code" className="text-xl font-mono font-bold text-emerald-400">{props.roomId}</span>
             {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-gray-400 group-hover:text-white" />}
           </button>
         </div>
@@ -191,12 +191,12 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
               <div className="flex gap-1 shrink-0">
                 {editingUserId === u.id ? (
                   <>
-                    <button onClick={handleSaveUser} className="p-1 hover:bg-gray-800 rounded-full text-green-500"><Check className="w-3 h-3" /></button>
-                    <button onClick={handleCancelEdit} className="p-1 hover:bg-gray-800 rounded-full text-red-500"><X className="w-3 h-3" /></button>
+                 <button aria-label="Save name" onClick={handleSaveUser} className="p-1 hover:bg-gray-800 rounded-full text-green-500"><Check className="w-3 h-3" /></button>
+                     <button aria-label="Cancel" onClick={handleCancelEdit} className="p-1 hover:bg-gray-800 rounded-full text-red-500"><X className="w-3 h-3" /></button>
                   </>
                 ) : (
                   u.id === props.currentUser.id && (
-                    <button onClick={() => handleStartEditUser(u)} className="p-1 hover:bg-gray-800 rounded-full text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"><Edit className="w-3 h-3" /></button>
+                    <button aria-label="Edit your name" onClick={() => handleStartEditUser(u)} className="p-1 hover:bg-gray-800 rounded-full text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"><Edit className="w-3 h-3" /></button>
                   )
                 )}
               </div>
@@ -218,7 +218,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
           <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 hover:bg-gray-800 rounded-full"><Menu className="w-5 h-5" /></button>
           <div className="hidden md:block">
             <h1 className="font-bold text-sm">{props.roomName}</h1>
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest">{props.users.length} Active Users</p>
+            <p data-testid="user-count" className="text-[10px] text-gray-500 uppercase tracking-widest">{props.users.length} Active Users</p>
           </div>
           
           <div className="flex gap-2">
@@ -226,9 +226,9 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
               <button onClick={props.onToggleCall} className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-full transition-all shadow-lg shadow-emerald-600/20 active:scale-95"><Phone className="w-3.5 h-3.5" /> Start Call</button>
             ) : (
               <div className="flex items-center gap-1.5 p-1 bg-gray-850 border border-gray-700 rounded-full shadow-xl">
-                <button onClick={props.onToggleAudio} className={`p-2 rounded-full transition-all ${props.currentUser.isMuted ? 'bg-red-500 text-white' : 'hover:bg-gray-800 text-gray-400'}`}>{props.currentUser.isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}</button>
-                <button onClick={props.onToggleVideo} className={`p-2 rounded-full transition-all ${props.currentUser.isVideoOff ? 'bg-red-500 text-white' : 'hover:bg-gray-800 text-gray-400'}`}>{props.currentUser.isVideoOff ? <VideoOff className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}</button>
-                <button onClick={props.onToggleCall} className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-full active:scale-95"><PhoneOff className="w-3.5 h-3.5" /></button>
+                 <button aria-label={props.currentUser.isMuted ? 'Unmute' : 'Mute'} onClick={props.onToggleAudio} className={`p-2 rounded-full transition-all ${props.currentUser.isMuted ? 'bg-red-500 text-white' : 'hover:bg-gray-800 text-gray-400'}`}>{props.currentUser.isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}</button>
+                 <button aria-label={props.currentUser.isVideoOff ? 'Turn camera on' : 'Turn camera off'} onClick={props.onToggleVideo} className={`p-2 rounded-full transition-all ${props.currentUser.isVideoOff ? 'bg-red-500 text-white' : 'hover:bg-gray-800 text-gray-400'}`}>{props.currentUser.isVideoOff ? <VideoOff className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}</button>
+                 <button aria-label="End call" onClick={props.onToggleCall} className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-full active:scale-95"><PhoneOff className="w-3.5 h-3.5" /></button>
               </div>
             )}
           </div>
@@ -236,7 +236,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
 
         {props.error && (
           <div className="absolute top-16 left-0 right-0 z-20 bg-red-600 text-white px-4 py-2 text-xs font-bold text-center flex items-center justify-center gap-2 animate-in slide-in-from-top duration-300">
-            <AlertCircle className="w-4 h-4" /> {props.error} <button onClick={props.onClearError} className="ml-2 p-1 hover:bg-red-700 rounded-full"><X className="w-4 h-4" /></button>
+            <AlertCircle className="w-4 h-4" /> {props.error} <button aria-label="Dismiss error" onClick={props.onClearError} className="ml-2 p-1 hover:bg-red-700 rounded-full"><X className="w-4 h-4" /></button>
           </div>
         )}
 
@@ -256,7 +256,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+          <div data-testid="chat-messages" className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
             {props.messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-2 opacity-50">
                 <Send className="w-8 h-8" />
@@ -267,7 +267,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
               if (m.type === 'system') {
                 return (
                   <div key={m.id} className="flex justify-center my-2">
-                    <span className="px-3 py-1 bg-gray-800/50 text-gray-500 text-[10px] uppercase font-bold tracking-wider rounded-full border border-gray-800">
+                    <span data-testid="system-message" className="px-3 py-1 bg-gray-800/50 text-gray-500 text-[10px] uppercase font-bold tracking-wider rounded-full border border-gray-800">
                       {m.content}
                     </span>
                   </div>
