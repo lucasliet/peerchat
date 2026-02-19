@@ -109,7 +109,7 @@ Then('the call controls bar is not shown', async ({ world }) => {
 
 Then('the guest sees their own video tile', async ({ world }) => {
   const page = world.guestPage ?? world.page;
-  await expect(page.getByText('Camera Off')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Camera Off').first()).toBeVisible({ timeout: 10_000 });
 });
 
 Then("the guest's video tile is removed from the host's video grid", async ({ world }) => {

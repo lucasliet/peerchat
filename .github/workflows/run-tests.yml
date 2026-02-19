@@ -34,6 +34,8 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+        env:
+          VITE_EXPOSE_PEER: 'true'
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
